@@ -262,11 +262,7 @@ def search_overseer_thread_ss(args, new_location_queue, pause_bit, encryption_li
 
 def search_worker_thread(args, account, search_items_queue, parse_lock, encryption_lib_path):
 
-    # If we have more than one account, stagger the logins such that they occur evenly over scan_delay
-    if len(args.accounts) > 1:
-        delay = (args.scan_delay / len(args.accounts)) * args.accounts.index(account)
-        log.debug('Delaying thread startup for %.2f seconds', delay)
-        time.sleep(delay)
+    stagger_thread(args, account)
 
     log.debug('Search worker thread starting')
 
@@ -354,6 +350,8 @@ def search_worker_thread(args, account, search_items_queue, parse_lock, encrypti
 
 def search_worker_thread_ss(args, account, search_items_queue, parse_lock, encryption_lib_path):
 
+    stagger_thread(args, account)
+
     log.debug('Search worker ss thread starting')
 
     # The forever loop for the thread
@@ -363,6 +361,11 @@ def search_worker_thread_ss(args, account, search_items_queue, parse_lock, encry
 
             # Create the API instance this will use
             api = PGoApi()
+            if args.proxy:
+                api.set_proxy({'http': args.proxy, 'https': args.proxy})
+
+            # Get current time
+            loop_start_time = int(round(time.time() * 1000))
 
             # The forever loop for the searches
             while True:
@@ -419,11 +422,17 @@ def search_worker_thread_ss(args, account, search_items_queue, parse_lock, encry
                                 log.error('Search step %s map parsing failed, retyring request in %g seconds', step, sleep_time)
                                 failed_total += 1
                                 time.sleep(sleep_time)
-
-                    time.sleep(args.scan_delay)
                 else:
                     search_items_queue.task_done()
                     log.info('cant keep up. skipping')
+
+                # If there's any time left between the start time and the time when we should be kicking off the next
+                # loop, hang out until its up.
+                sleep_delay_remaining = loop_start_time + (args.scan_delay * 1000) - int(round(time.time() * 1000))
+                if sleep_delay_remaining > 0:
+                        time.sleep(sleep_delay_remaining / 1000)
+
+                loop_start_time += args.scan_delay * 1000
 
         # catch any process exceptions, log them, and continue the thread
         except Exception as e:
@@ -468,6 +477,19 @@ def map_request(api, position):
     except Exception as e:
         log.warning('Exception while downloading map: %s', e)
         return False
+
+
+def stagger_thread(args, account):
+    # If we have more than one account, stagger the logins such that they occur evenly over scan_delay
+    if len(args.accounts) > 1:
+        if len(args.accounts) > args.scan_delay:  # force ~1 second delay between threads if you have many accounts
+            delay = args.accounts.index(account) \
+                + ((random.random() - .5) / 2) if args.accounts.index(account) > 0 else 0
+        else:
+            delay = (args.scan_delay / len(args.accounts)) * args.accounts.index(account)
+
+        log.debug('Delaying thread startup for %.2f seconds', delay)
+        time.sleep(delay)
 
 
 class TooManyLoginAttempts(Exception):
