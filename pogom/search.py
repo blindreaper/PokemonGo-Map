@@ -265,7 +265,7 @@ def search_overseer_thread_ss(args, new_location_queue, pause_bit, encryption_li
         Shash[spawn['lng']] = spawn['time']
     # sort spawn points
     spawns.sort(key=itemgetter('time'))
-    log.info('total of %d spawns to track', len(spawns))
+    log.info('Total of %d spawns to track', len(spawns))
     # find start position
     pos = SbSearch(spawns, (curSec() + 3540) % 3600)
     while True:
@@ -275,17 +275,16 @@ def search_overseer_thread_ss(args, new_location_queue, pause_bit, encryption_li
         location.append(spawns[pos]['lat'])
         location.append(spawns[pos]['lng'])
         location.append(0)
-        # hard code step limit to 1? usecases?
-        for step, step_location in enumerate(generate_location_steps(location, args.step_limit), 1):
+        for step, step_location in enumerate(generate_location_steps(location, 1), 1):
                 log.debug('Queueing step %d @ %f/%f/%f', pos, step_location[0], step_location[1], step_location[2])
                 search_args = (step, step_location, spawns[pos]['time'])
                 search_items_queue.put(search_args)
         pos = (pos + 1) % len(spawns)
         if pos == 0:
             while not(search_items_queue.empty()):
-                log.info('search_items_queue not empty. waiting 10 secrestarting at top of hour')
+                log.info('Search_items_queue not empty. Waiting 10 secconds. Restarting at top of hour')
                 time.sleep(10)
-            log.info('restarting from top of list and finding current time')
+            log.info('Restarting from top of list and finding current time')
             pos = SbSearch(spawns, (curSec() + 3540) % 3600)
 
 
@@ -453,7 +452,7 @@ def search_worker_thread_ss(args, account, search_items_queue, parse_lock, encry
                                 time.sleep(sleep_time)
                 else:
                     search_items_queue.task_done()
-                    log.info('cant keep up. skipping')
+                    log.info('Cant keep up. Skipping')
 
                 # If there's any time left between the start time and the time when we should be kicking off the next
                 # loop, hang out until its up.
