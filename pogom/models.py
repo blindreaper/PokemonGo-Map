@@ -216,6 +216,7 @@ class Pokemon(BaseModel):
 
         return list(query)
 
+
 class Pokestop(BaseModel):
     pokestop_id = CharField(primary_key=True, max_length=50)
     enabled = BooleanField()
