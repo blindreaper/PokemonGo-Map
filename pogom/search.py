@@ -250,12 +250,14 @@ def search_overseer_thread_ss(args, new_location_queue, pause_bit, encryption_li
         t.daemon = True
         t.start()
 
-    # FIXME add arg for switching
-    # load spawn points
-    # or calculate directly from sql
+    # FIXME add arg for switching load spawn points
     try:
         with open('spawns.json') as file:
-            spawns = json.load(file)
+            try:
+                spawns = json.load(file)
+            except ValueError:
+                log.error("spawns.json is not valid")
+                return
             file.close()
     except IOError:
         log.error("Error opening spawns.json")

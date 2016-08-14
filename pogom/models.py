@@ -204,6 +204,17 @@ class Pokemon(BaseModel):
 
         return list(query)
 
+    @classmethod
+    def get_all_spawnpoints(cls):
+        query = (Pokemon
+                 .select(Pokemon.latitude.alias('lat'),
+                         Pokemon.longitude.alias('lng'),
+                         ((Pokemon.disappear_time.minute * 60) + (Pokemon.disappear_time.second + 2700) % 3600).alias('time'),
+                         )
+                 .group_by(Pokemon.spawnpoint_id)
+                 ).dicts()
+
+        return list(query)
 
 class Pokestop(BaseModel):
     pokestop_id = CharField(primary_key=True, max_length=50)

@@ -9,6 +9,7 @@ import time
 import re
 import requests
 import ssl
+import json
 
 from distutils.version import StrictVersion
 
@@ -22,7 +23,7 @@ from pogom.app import Pogom
 from pogom.utils import get_args, insert_mock_data, get_encryption_lib_path
 
 from pogom.search import search_overseer_thread, search_overseer_thread_ss, fake_search_loop
-from pogom.models import init_database, create_tables, drop_tables
+from pogom.models import init_database, create_tables, drop_tables, Pokemon
 
 # Currently supported pgoapi
 pgoapi_version = "1.1.7"
@@ -135,6 +136,19 @@ if __name__ == '__main__':
         elif os.path.isfile(args.db):
             os.remove(args.db)
     create_tables(db)
+
+    if args.spawnpoint_scanning and not args.only_server:
+        if not os.path.isfile("spawns.json"):
+            log.info('Could not find spawns.json, generating now. This may take up to 60 seconds')
+            try:
+                with open('spawns.json', 'w+') as file:
+                    spawns = Pokemon.get_all_spawnpoints()
+                    file.write(json.dumps(spawns))
+                    file.close()
+                    log.info('Finished generating spawns.json')
+            except IOError:
+                log.error("Error writing to spawns.json, exiting")
+                sys.exit()
 
     app.set_current_location(position)
 
