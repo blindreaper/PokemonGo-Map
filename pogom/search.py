@@ -235,7 +235,7 @@ def search_overseer_thread(args, new_location_queue, pause_bit, encryption_lib_p
 Shash = {}
 
 
-def search_overseer_thread_ss(args, new_location_queue, pause_bit, encryption_lib_path):
+def search_overseer_thread_ss(args, new_location_queue, pause_bit, encryption_lib_path, db_updates_queue, wh_queue):
     global spawns, Shash, going
     log.info('Search ss overseer starting')
     search_items_queue = Queue()
@@ -246,8 +246,8 @@ def search_overseer_thread_ss(args, new_location_queue, pause_bit, encryption_li
     for i, account in enumerate(args.accounts):
         log.debug('Starting search worker thread %d for user %s', i, account['username'])
         t = Thread(target=search_worker_thread_ss,
-                   name='ss_search_worker_{}'.format(i),
-                   args=(args, account, search_items_queue, parse_lock, encryption_lib_path))
+                   name='ss-search-worker-{}'.format(i),
+                   args=(args, account, search_items_queue, parse_lock, encryption_lib_path, db_updates_queue, wh_queue))
         t.daemon = True
         t.start()
 
@@ -396,7 +396,7 @@ def search_worker_thread(args, account, search_items_queue, parse_lock, encrypti
             log.exception('Exception in search_worker: %s. Username: %s', e, account['username'])
 
 
-def search_worker_thread_ss(args, account, search_items_queue, parse_lock, encryption_lib_path):
+def search_worker_thread_ss(args, account, search_items_queue, parse_lock, encryption_lib_path, dbq, whq):
 
     stagger_thread(args, account)
 
@@ -412,19 +412,27 @@ def search_worker_thread_ss(args, account, search_items_queue, parse_lock, encry
             if args.proxy:
                 api.set_proxy({'http': args.proxy, 'https': args.proxy})
 
+            api.activate_signature(encryption_lib_path)
+
             # Get current time
             loop_start_time = int(round(time.time() * 1000))
 
             # The forever loop for the searches
             while True:
 
+                t = Timer('search')
+
                 # Grab the next thing to search (when available)
-                step, step_location, spawntime = search_items_queue.get()
+                step, step_location = search_items_queue.get()
+
+                t.add('item')
 
                 log.info('Searching step %d, remaining %d', step, search_items_queue.qsize())
                 if timeDif(curSec(), spawntime) < 840:  # if we arnt 14mins too late
                     # Let the api know where we intend to be for this loop
                     api.set_position(*step_location)
+
+                    t.add('setp')
 
                     # The loop to try very hard to scan this step
                     failed_total = 0
@@ -447,10 +455,12 @@ def search_worker_thread_ss(args, account, search_items_queue, parse_lock, encry
                         # Ok, let's get started -- check our login status
                         check_login(args, account, api, step_location)
 
-                        api.activate_signature(encryption_lib_path)
+                        t.add('login')
 
                         # Make the actual request (finally!)
                         response_dict = map_request(api, step_location)
+
+                        t.add('request')
 
                         # G'damnit, nothing back. Mark it up, sleep, carry on
                         if not response_dict:
@@ -463,6 +473,7 @@ def search_worker_thread_ss(args, account, search_items_queue, parse_lock, encry
                         with parse_lock:
                             try:
                                 parse_map(response_dict, step_location)
+                                t.add('parse map')
                                 log.debug('Search step %s completed', step)
                                 search_items_queue.task_done()
                                 break  # All done, get out of the request-retry loop
@@ -470,6 +481,7 @@ def search_worker_thread_ss(args, account, search_items_queue, parse_lock, encry
                                 log.error('Search step %s map parsing failed, retyring request in %g seconds', step, sleep_time)
                                 failed_total += 1
                         time.sleep(sleep_time)
+                        t.checkpoint('search complete')
                 else:
                     search_items_queue.task_done()
                     log.info('Cant keep up. Skipping')
@@ -481,6 +493,9 @@ def search_worker_thread_ss(args, account, search_items_queue, parse_lock, encry
                         time.sleep(sleep_delay_remaining / 1000)
 
                 loop_start_time += args.scan_delay * 1000
+                t.add('delay')
+                if args.debug:
+                    t.output()
 
         # catch any process exceptions, log them, and continue the thread
         except Exception as e:
