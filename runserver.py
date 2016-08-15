@@ -153,24 +153,22 @@ if __name__ == '__main__':
             # If running in data gather or old mode
             if not args.spawnpoint_scanning:
                 log.debug('Starting a real search thread')
-                if not args.spawnpoint_scanning:
-                    search_thread = Thread(target=search_overseer_thread, args=(args, new_location_queue, pause_bit, encryption_lib_path))
-                else:
-                    search_thread = Thread(target=search_overseer_thread_ss, args=(args, new_location_queue, pause_bit, encryption_lib_path))
+                search_thread = Thread(target=search_overseer_thread, args=(args, new_location_queue, pause_bit, encryption_lib_path))
             # if using the new -ss mode
             else:
-                if not os.path.isfile("spawns.json"):
-                    log.info('Could not find spawns.json, generating now. This may take up to 60 seconds')
+                if not os.path.isfile(args.spawnpoint_scanning):
+                    log.info('Could not find ' + args.spawnpoint_scanning + ', generating now. This may take up to 60 seconds')
                     try:
-                        with open('spawns.json', 'w+') as file:
+                        with open(args.spawnpoint_scanning, 'w+') as file:
                             spawns = Pokemon.get_all_spawnpoints()
                             file.write(json.dumps(spawns))
                             file.close()
-                            log.info('Finished generating spawns.json')
+                            log.info('Finished generating ' + args.spawnpoint_scanning)
                     except IOError:
-                        log.error("Error writing to spawns.json, exiting")
+                        log.error("Error writing to " + args.spawnpoint_scanning + ", exiting")
                         sys.exit()
 
+                search_thread = Thread(target=search_overseer_thread_ss, args=(args, new_location_queue, pause_bit, encryption_lib_path))
         else:
             log.debug('Starting a fake search thread')
             insert_mock_data(position)
