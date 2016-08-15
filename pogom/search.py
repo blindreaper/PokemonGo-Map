@@ -250,7 +250,6 @@ def search_overseer_thread_ss(args, new_location_queue, pause_bit, encryption_li
         t.daemon = True
         t.start()
 
-    # FIXME add arg for switching load spawn points
     try:
         with open(args.spawnpoint_scanning) as file:
             try:
@@ -451,7 +450,7 @@ def search_worker_thread_ss(args, account, search_items_queue, parse_lock, encry
                             except KeyError:
                                 log.error('Search step %s map parsing failed, retyring request in %g seconds', step, sleep_time)
                                 failed_total += 1
-                                time.sleep(sleep_time)
+                        time.sleep(sleep_time)
                 else:
                     search_items_queue.task_done()
                     log.info('Cant keep up. Skipping')
