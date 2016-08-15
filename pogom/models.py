@@ -3,6 +3,7 @@
 import logging
 import calendar
 import sys
+import time
 from peewee import SqliteDatabase, InsertQuery, \
     IntegerField, CharField, DoubleField, BooleanField, \
     DateTimeField, CompositeKey, fn
@@ -14,7 +15,7 @@ from datetime import datetime, timedelta
 from base64 import b64encode
 
 from . import config
-from .utils import get_pokemon_name, get_pokemon_rarity, get_pokemon_types, get_args, send_to_webhook
+from .utils import get_pokemon_name, get_pokemon_rarity, get_pokemon_types, get_args, Timer
 from .transform import transform_from_wgs_to_gcj
 from .customLog import printPokemon
 
@@ -333,11 +334,11 @@ class Versions(flaskDb.Model):
         primary_key = False
 
 
-def parse_map(map_dict, step_location):
+# todo: this probably shouldn't _really_ be in "models" anymore, but w/e
+def parse_map(args, map_dict, step_location, db_update_queue, wh_update_queue):
     pokemons = {}
     pokestops = {}
     gyms = {}
-    scanned = {}
 
     cells = map_dict['responses']['GET_MAP_OBJECTS']['map_cells']
     for cell in cells:
@@ -362,18 +363,17 @@ def parse_map(map_dict, step_location):
                     'disappear_time': d_t
                 }
 
-                webhook_data = {
-                    'encounter_id': b64encode(str(p['encounter_id'])),
-                    'spawnpoint_id': p['spawn_point_id'],
-                    'pokemon_id': p['pokemon_data']['pokemon_id'],
-                    'latitude': p['latitude'],
-                    'longitude': p['longitude'],
-                    'disappear_time': calendar.timegm(d_t.timetuple()),
-                    'last_modified_time': p['last_modified_timestamp_ms'],
-                    'time_until_hidden_ms': p['time_till_hidden_ms']
-                }
-
-                send_to_webhook('pokemon', webhook_data)
+                if args.webhooks:
+                    wh_update_queue.put(('pokemon', {
+                        'encounter_id': b64encode(str(p['encounter_id'])),
+                        'spawnpoint_id': p['spawn_point_id'],
+                        'pokemon_id': p['pokemon_data']['pokemon_id'],
+                        'latitude': p['latitude'],
+                        'longitude': p['longitude'],
+                        'disappear_time': calendar.timegm(d_t.timetuple()),
+                        'last_modified_time': p['last_modified_timestamp_ms'],
+                        'time_until_hidden_ms': p['time_till_hidden_ms']
+                    }))
 
         for f in cell.get('forts', []):
             if config['parse_pokestops'] and f.get('type') == 1:  # Pokestops
@@ -381,13 +381,13 @@ def parse_map(map_dict, step_location):
                     lure_expiration = datetime.utcfromtimestamp(
                         f['last_modified_timestamp_ms'] / 1000.0) + timedelta(minutes=30)
                     active_fort_modifier = f['active_fort_modifier']
-                    webhook_data = {
-                        'latitude': f['latitude'],
-                        'longitude': f['longitude'],
-                        'last_modified_time': f['last_modified_timestamp_ms'],
-                        'active_fort_modifier': active_fort_modifier
-                    }
-                    send_to_webhook('pokestop', webhook_data)
+                    if args.webhooks:
+                        wh_update_queue.put(('pokestop', {
+                            'latitude': f['latitude'],
+                            'longitude': f['longitude'],
+                            'last_modified_time': f['last_modified_timestamp_ms'],
+                            'active_fort_modifier': active_fort_modifier
+                        }))
                 else:
                     lure_expiration, active_fort_modifier = None, None
 
@@ -415,45 +415,23 @@ def parse_map(map_dict, step_location):
                         f['last_modified_timestamp_ms'] / 1000.0),
                 }
 
-    pokemons_upserted = 0
-    pokestops_upserted = 0
-    gyms_upserted = 0
+    if len(pokemons):
+        db_update_queue.put((Pokemon, pokemons))
+    if len(pokestops):
+        db_update_queue.put((Pokestop, pokestops))
+    if len(gyms):
+        db_update_queue.put((Gym, gyms))
 
-    scanned[0] = {
+    log.info('Parsing found %d pokemons, %d pokestops, and %d gyms',
+             len(pokemons),
+             len(pokestops),
+             len(gyms))
+
+    db_update_queue.put((ScannedLocation, {0: {
         'latitude': step_location[0],
         'longitude': step_location[1],
-        'last_modified': datetime.utcnow(),
-    }
-
-    while True:
-        try:
-            flaskDb.connect_db()
-            break
-        except Exception as e:
-            log.warning('%s... Retrying', e)
-
-    if pokemons and config['parse_pokemon']:
-        pokemons_upserted = len(pokemons)
-        bulk_upsert(Pokemon, pokemons)
-
-    if pokestops and config['parse_pokestops']:
-        pokestops_upserted = len(pokestops)
-        bulk_upsert(Pokestop, pokestops)
-
-    if gyms and config['parse_gyms']:
-        gyms_upserted = len(gyms)
-        bulk_upsert(Gym, gyms)
-
-    bulk_upsert(ScannedLocation, scanned)
-
-    clean_database()
-
-    flaskDb.close_db(None)
-
-    log.info('Upserted %d pokemon, %d pokestops, and %d gyms',
-             pokemons_upserted,
-             pokestops_upserted,
-             gyms_upserted)
+        'last_modified': datetime.utcnow()
+    }}))
 
     return True
 
@@ -471,6 +449,56 @@ def clean_database():
                  .where((Pokemon.disappear_time <
                         (datetime.utcnow() - timedelta(hours=args.purge_data)))))
         query.execute()
+
+
+def db_updater(args, q):
+    # The forever loop
+    while True:
+        try:
+
+            while True:
+                try:
+                    flaskDb.connect_db()
+                    break
+                except Exception as e:
+                    log.warning('%s... Retrying', e)
+
+            # Loop the queue
+            while True:
+
+                model, data = q.get()
+
+                t = Timer('dbupdate')
+
+                t.add('conn')
+
+                upserted = len(data)
+                bulk_upsert(model, data)
+
+                t.add('updt')
+
+                if args.debug:
+                    t.output()
+
+                q.task_done()
+
+                log.info('Upserted %d records into %s (upsert queue remaining: %d)',
+                         upserted,
+                         model.__name__,
+                         q.qsize())
+
+        except Exception as e:
+            log.exception('Exception in db_updater: %s', e)
+
+
+def clean_db_loop():
+    while True:
+        try:
+            clean_database()
+            log.info('Regular database cleaning complete')
+            time.sleep(60)
+        except Exception as e:
+            log.exception('Exception in clean_db: %s', e)
 
 
 def bulk_upsert(cls, data):

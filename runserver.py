@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import os
@@ -23,7 +23,8 @@ from pogom.app import Pogom
 from pogom.utils import get_args, insert_mock_data, get_encryption_lib_path
 
 from pogom.search import search_overseer_thread, search_overseer_thread_ss, fake_search_loop
-from pogom.models import init_database, create_tables, drop_tables, Pokemon
+from pogom.models import init_database, create_tables, drop_tables, db_updater, clean_db_loop, Pokemon
+from pogom.webhook import wh_updater
 
 # Currently supported pgoapi
 pgoapi_version = "1.1.7"
@@ -147,13 +148,37 @@ if __name__ == '__main__':
     new_location_queue = Queue()
     new_location_queue.put(position)
 
+    # DB Updates
+    db_updates_queue = Queue()
+
+    # Thread to process database updates
+    db_updater_thread = Thread(target=db_updater, args=(args, db_updates_queue))
+    db_updater_thread.daemon = True
+    db_updater_thread.name = 'db-updater'
+    db_updater_thread.start()
+
+    # db clearner
+    db_cleaner_thread = Thread(target=clean_db_loop)
+    db_cleaner_thread.daemon = True
+    db_cleaner_thread.name = 'db-cleaner'
+    db_cleaner_thread.start()
+
+    # WH Updates
+    wh_updates_queue = Queue()
+
+    # Thread to process webhook updates
+    wh_updater_thread = Thread(target=wh_updater, args=(args, wh_updates_queue))
+    wh_updater_thread.daemon = True
+    wh_updater_thread.name = 'webhooks'
+    wh_updater_thread.start()
+
     if not args.only_server:
         # Gather the pokemons!
         if not args.mock:
             # If running in data gather or old mode
             if not args.spawnpoint_scanning:
                 log.debug('Starting a real search thread')
-                search_thread = Thread(target=search_overseer_thread, args=(args, new_location_queue, pause_bit, encryption_lib_path))
+                search_thread = Thread(target=search_overseer_thread, args=(args, new_location_queue, pause_bit, encryption_lib_path, db_updates_queue, wh_updates_queue))
             # if using the new -ss mode
             else:
                 if not os.path.isfile(args.spawnpoint_scanning):
@@ -168,14 +193,16 @@ if __name__ == '__main__':
                         log.error("Error writing to " + args.spawnpoint_scanning + ", exiting")
                         sys.exit()
 
-                search_thread = Thread(target=search_overseer_thread_ss, args=(args, new_location_queue, pause_bit, encryption_lib_path))
+                log.debug('Starting a real search thread')
+                search_thread = Thread(target=search_overseer_thread_ss, args=(
+                    args, new_location_queue, pause_bit, encryption_lib_path))
         else:
             log.debug('Starting a fake search thread')
             insert_mock_data(position)
             search_thread = Thread(target=fake_search_loop)
 
         search_thread.daemon = True
-        search_thread.name = 'search_thread'
+        search_thread.name = 'search-overseer'
         search_thread.start()
 
     if args.cors:

@@ -9,8 +9,9 @@ import json
 from datetime import datetime, timedelta
 import logging
 import shutil
-import requests
 import platform
+import pprint
+import time
 
 from . import config
 
@@ -299,26 +300,6 @@ def get_pokemon_types(pokemon_id):
     return map(lambda x: {"type": i8ln(x['type']), "color": x['color']}, pokemon_types)
 
 
-def send_to_webhook(message_type, message):
-    args = get_args()
-
-    data = {
-        'type': message_type,
-        'message': message
-    }
-
-    if args.webhooks:
-        webhooks = args.webhooks
-
-        for w in webhooks:
-            try:
-                requests.post(w, json=data, timeout=(None, 1))
-            except requests.exceptions.ReadTimeout:
-                log.debug('Response timeout on webhook endpoint %s', w)
-            except requests.exceptions.RequestException as e:
-                log.debug(e)
-
-
 def get_encryption_lib_path():
     # win32 doesn't mean necessarily 32 bits
     if sys.platform == "win32" or sys.platform == "cygwin":
@@ -364,3 +345,21 @@ def get_encryption_lib_path():
         raise Exception(err)
 
     return lib_path
+
+
+class Timer():
+
+    def __init__(self, name):
+        self.times = [(name, time.time(), 0)]
+
+    def add(self, step):
+        t = time.time()
+        self.times.append((step, t, round((t - self.times[-1][1]) * 1000)))
+
+    def checkpoint(self, step):
+        t = time.time()
+        self.times.append(('total @ ' + step, t, t - self.times[0][1]))
+
+    def output(self):
+        self.checkpoint('end')
+        pprint.pprint(self.times)
