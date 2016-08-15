@@ -252,15 +252,15 @@ def search_overseer_thread_ss(args, new_location_queue, pause_bit, encryption_li
 
     # FIXME add arg for switching load spawn points
     try:
-        with open('spawns.json') as file:
+        with open(args.spawnpoint_scanning) as file:
             try:
                 spawns = json.load(file)
             except ValueError:
-                log.error("spawns.json is not valid")
+                log.error(args.spawnpoint_scanning + " is not valid")
                 return
             file.close()
     except IOError:
-        log.error("Error opening spawns.json")
+        log.error("Error opening " + args.spawnpoint_scanning)
         return
 
     for spawn in spawns:
