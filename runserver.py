@@ -137,19 +137,6 @@ if __name__ == '__main__':
             os.remove(args.db)
     create_tables(db)
 
-    if args.spawnpoint_scanning and not args.only_server:
-        if not os.path.isfile("spawns.json"):
-            log.info('Could not find spawns.json, generating now. This may take up to 60 seconds')
-            try:
-                with open('spawns.json', 'w+') as file:
-                    spawns = Pokemon.get_all_spawnpoints()
-                    file.write(json.dumps(spawns))
-                    file.close()
-                    log.info('Finished generating spawns.json')
-            except IOError:
-                log.error("Error writing to spawns.json, exiting")
-                sys.exit()
-
     app.set_current_location(position)
 
     # Control the search status (running or not) across threads
@@ -163,11 +150,27 @@ if __name__ == '__main__':
     if not args.only_server:
         # Gather the pokemons!
         if not args.mock:
-            log.debug('Starting a real search thread')
-            if not args.spawnpoint_scanning:
-                search_thread = Thread(target=search_overseer_thread, args=(args, new_location_queue, pause_bit, encryption_lib_path))
+            #If running in data gather or old mode
+            if not args.spawnpoint_scanning: 
+                log.debug('Starting a real search thread')
+                if not args.spawnpoint_scanning:
+                    search_thread = Thread(target=search_overseer_thread, args=(args, new_location_queue, pause_bit, encryption_lib_path))
+                else:
+                    search_thread = Thread(target=search_overseer_thread_ss, args=(args, new_location_queue, pause_bit, encryption_lib_path))
+            #if using the new -ss mode
             else:
-                search_thread = Thread(target=search_overseer_thread_ss, args=(args, new_location_queue, pause_bit, encryption_lib_path))
+            if not os.path.isfile("spawns.json"):
+                log.info('Could not find spawns.json, generating now. This may take up to 60 seconds')
+                try:
+                    with open('spawns.json', 'w+') as file:
+                        spawns = Pokemon.get_all_spawnpoints()
+                        file.write(json.dumps(spawns))
+                        file.close()
+                        log.info('Finished generating spawns.json')
+                except IOError:
+                log.error("Error writing to spawns.json, exiting")
+                sys.exit()
+
         else:
             log.debug('Starting a fake search thread')
             insert_mock_data(position)
