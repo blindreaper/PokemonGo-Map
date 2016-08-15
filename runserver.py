@@ -150,27 +150,35 @@ if __name__ == '__main__':
     if not args.only_server:
         # Gather the pokemons!
         if not args.mock:
-			# check the sort of scan
-			if not args.spawnpoint_scanning:
-				log.debug('Starting a real search thread')
-				search_thread = Thread(target=search_overseer_thread, args=(args, new_location_queue, pause_bit, encryption_lib_path))
-			#using -ss
-			else:
-				#check if spawns .json file exists
-				if not os.path.isfile(args.spawnpoint_scanning):
-					#if not make it from db
-					log.info('Could not find ' + args.spawnpoint_scanning + ', generating now. This may take up to 60 seconds')
-					try:
-						with open(args.spawnpoint_scanning, 'w+') as file:
-							spawns = Pokemon.get_all_spawnpoints()
-							file.write(json.dumps(spawns))
-							file.close()
-							log.info('Finished generating ' + args.spawnpoint_scanning)
-					except IOError:
-						log.error("Error writing to " + args.spawnpoint_scanning + ", exiting")
-						sys.exit()
-				#start the scan sceduler
-				search_thread = Thread(target=search_overseer_thread_ss, args=(args, new_location_queue, pause_bit, encryption_lib_path))
+            # check the sort of scan
+            if not args.spawnpoint_scanning:
+                log.debug('Starting a real search thread')
+                search_thread = Thread(target=search_overseer_thread, args=(args, new_location_queue, pause_bit, encryption_lib_path))
+            #using -ss
+            else:
+                #check if spawns .json file exists
+                if not os.path.isfile(args.spawnpoint_scanning):
+                    #if not make it from db
+                    log.info('Could not find ' + args.spawnpoint_scanning + ', generating now. This may take up to 60 seconds')
+                    if(args.southwest is None or args.northeast is None):
+                        log.info('-sw and -ne not specified, dumping all locations')
+                    else:
+                        log.info('-sw and -ne specified, dumping using bounding rectangle')
+                    try:
+                        spawns = Pokemon.get_all_spawnpoints(args.northeast, args.southwest)
+                        if spawns is not None:
+                            with open(args.spawnpoint_scanning, 'w+') as file:
+                                file.write(json.dumps(spawns))
+                                file.close()
+                                log.info('Finished generating ' + args.spawnpoint_scanning)
+                        else:
+                            log.info('Generation failed, no spawns were found, exiting')
+                            sys.exit()
+                    except IOError:
+                        log.error("Error writing to " + args.spawnpoint_scanning + ", exiting")
+                        sys.exit()
+                #start the scan sceduler
+                search_thread = Thread(target=search_overseer_thread_ss, args=(args, new_location_queue, pause_bit, encryption_lib_path))
         else:
             log.debug('Starting a fake search thread')
             insert_mock_data(position)

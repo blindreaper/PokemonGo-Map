@@ -3,6 +3,7 @@
 import logging
 import calendar
 import sys
+import re
 from peewee import SqliteDatabase, InsertQuery, \
     IntegerField, CharField, DoubleField, BooleanField, \
     DateTimeField, CompositeKey, fn
@@ -208,17 +209,52 @@ class Pokemon(BaseModel):
 
         return list(query.dicts())
 
-	#get all spawnpoints from database, [taken from pr#585]
-	@classmethod
-	def get_all_spawnpoints(cls):
-		query = (Pokemon
-				.select(Pokemon.latitude.alias('lat'),
-						Pokemon.longitude.alias('lng'),
-						((Pokemon.disappear_time.minute * 60) + (Pokemon.disappear_time.second + 2700) % 3600).alias('time'),
-						)
-				.group_by(Pokemon.spawnpoint_id)
-				).dicts()
-		return list(query)
+    #get all spawnpoints from database, [taken from pr#585]
+    @classmethod
+    def get_all_spawnpoints(cls, neCoord, swCoord):
+        query = (Pokemon
+                .select(Pokemon.latitude.alias('lat'),
+                        Pokemon.longitude.alias('lng'),
+                        Pokemon.disappear_time.alias('time'),
+                        Pokemon.spawnpoint_id
+                        ))
+        # Pretty much all by Xcelled
+        # https://gist.github.com/Xcelled/c5b397dfe2c32e61e7aa06479b32bc34#file-spawnpoint_exporter-py-L57
+        if (swCoord is not None or neCoord is not None):
+            coord_re = re.compile("^(\-?\d+\.\d+),?\s?(\-?\d+\.\d+)$")
+            sw = coord_re.match(swCoord)
+            ne = coord_re.match(neCoord)
+            valid_coord = True
+            if not sw:
+                log.error('Invalid southwest coord, defaulting to dump all')
+                valid_coord = False
+            if not ne:
+                log.error('Invalid northeast coord, defaulting to dump all')
+                valid_coord = False
+            if valid_coord:
+                query = (query.where(
+                    (Pokemon.latitude >= float(sw.group(1))) &
+                    (Pokemon.longitude >= float(sw.group(2))) &
+                    (Pokemon.latitude <= float(ne.group(1))) &
+                    (Pokemon.longitude <= float(ne.group(2)))
+                )
+                )
+
+        query = query.dicts()
+        uniq_temp = set()
+        uniq_real = []
+
+        for row in query:
+            min = row['time'].minute
+            sec = row['time'].second
+            row['time'] = (((min * 60) + (sec + 2710)) % 3600)
+            spawn = (row['spawnpoint_id'], row['time'])
+            if spawn not in uniq_temp:  # SQL group by, because peewee can't handle group by on aliased fields
+                uniq_temp.add(spawn)
+                del row['spawnpoint_id']
+                uniq_real.append(row)
+
+        return list(uniq_real)
  
 class Pokestop(BaseModel):
     pokestop_id = CharField(primary_key=True, max_length=50)
