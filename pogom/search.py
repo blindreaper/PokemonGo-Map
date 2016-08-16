@@ -116,8 +116,8 @@ def curSec():
 
 
 # gets the diference between two times past the hour (in a range from -1800 to 1800)
-def timeDif(a,b):
-    dif = a-b
+def timeDif(a, b):
+    dif = a - b
     if (dif < -1800):
         dif += 3600
     if (dif > 1800):
@@ -125,7 +125,7 @@ def timeDif(a,b):
     return dif
 
 
-#binary search to get the lowest index of the item in Slist that has atleast time T
+# binary search to get the lowest index of the item in Slist that has atleast time T
 def SbSearch(Slist, T):
     first = 0
     last = len(Slist) - 1
@@ -263,7 +263,7 @@ def search_overseer_thread_ss(args, new_location_queue, pause_bit, encryption_li
 
     spawns.sort(key=itemgetter('time'))
     log.info('Total of %d spawns to track', len(spawns))
-    #find the inital location (spawn thats 60sec old)
+    # find the inital location (spawn thats 60sec old)
     pos = SbSearch(spawns, (curSec() + 3540) % 3600)
     while True:
         while timeDif(curSec(), spawns[pos]['time']) < 60:

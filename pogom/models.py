@@ -213,11 +213,11 @@ class Pokemon(BaseModel):
     @classmethod
     def get_all_spawnpoints(cls, neCoord, swCoord):
         query = (Pokemon
-                        .select(Pokemon.latitude.alias('lat'),
-                                Pokemon.longitude.alias('lng'),
-                                Pokemon.disappear_time.alias('time'),
-                                Pokemon.spawnpoint_id
-                                ))
+                 .select(Pokemon.latitude.alias('lat'),
+                         Pokemon.longitude.alias('lng'),
+                         Pokemon.disappear_time.alias('time'),
+                         Pokemon.spawnpoint_id
+                         ))
         # Pretty much all by Xcelled
         # https://gist.github.com/Xcelled/c5b397dfe2c32e61e7aa06479b32bc34#file-spawnpoint_exporter-py-L57
         if (swCoord is not None or neCoord is not None):
