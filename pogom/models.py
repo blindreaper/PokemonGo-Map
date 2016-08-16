@@ -209,15 +209,15 @@ class Pokemon(BaseModel):
 
         return list(query.dicts())
 
-    #get all spawnpoints from database, [taken from pr#585]
+    # get all spawnpoints from database, [taken from pr#585]
     @classmethod
     def get_all_spawnpoints(cls, neCoord, swCoord):
         query = (Pokemon
-                .select(Pokemon.latitude.alias('lat'),
-                        Pokemon.longitude.alias('lng'),
-                        Pokemon.disappear_time.alias('time'),
-                        Pokemon.spawnpoint_id
-                        ))
+                        .select(Pokemon.latitude.alias('lat'),
+                                Pokemon.longitude.alias('lng'),
+                                Pokemon.disappear_time.alias('time'),
+                                Pokemon.spawnpoint_id
+                                ))
         # Pretty much all by Xcelled
         # https://gist.github.com/Xcelled/c5b397dfe2c32e61e7aa06479b32bc34#file-spawnpoint_exporter-py-L57
         if (swCoord is not None or neCoord is not None):
@@ -255,7 +255,8 @@ class Pokemon(BaseModel):
                 uniq_real.append(row)
 
         return list(uniq_real)
- 
+
+
 class Pokestop(BaseModel):
     pokestop_id = CharField(primary_key=True, max_length=50)
     enabled = BooleanField()

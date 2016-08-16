@@ -89,7 +89,7 @@ if __name__ == '__main__':
         logging.getLogger('requests').setLevel(logging.DEBUG)
         logging.getLogger('pgoapi').setLevel(logging.DEBUG)
         logging.getLogger('rpc_api').setLevel(logging.DEBUG)
-    
+
     if not args.spawnpoint_scanning:
         # use lat/lng directly if matches such a pattern
         prog = re.compile("^(\-?\d+\.\d+),?\s?(\-?\d+\.\d+)$")
@@ -156,11 +156,11 @@ if __name__ == '__main__':
             if not args.spawnpoint_scanning:
                 log.debug('Starting a real search thread')
                 search_thread = Thread(target=search_overseer_thread, args=(args, new_location_queue, pause_bit, encryption_lib_path))
-            #using -ss
+            # using -ss
             else:
-                #check if spawns .json file exists
+                # check if spawns .json file exists
                 if not os.path.isfile(args.spawnpoint_scanning):
-                    #if not make it from db
+                    # if not make it from db
                     log.info('Could not find ' + args.spawnpoint_scanning + ', generating now. This may take up to 60 seconds')
                     if(args.southwest is None or args.northeast is None):
                         log.info('-sw and -ne not specified, dumping all locations')
@@ -179,12 +179,12 @@ if __name__ == '__main__':
                     except IOError:
                         log.error("Error writing to " + args.spawnpoint_scanning + ", exiting")
                         sys.exit()
-                #get the first position in the file
+                # get the first position in the file
                 with open(args.spawnpoint_scanning) as file:
                     sp = json.load(file)
-                    app.set_current_location((sp[0]['lat'],sp[0]['lng'],0.0))
+                    app.set_current_location((sp[0]['lat'], sp[0]['lng'], 0.0))
                     file.close()
-                #start the scan sceduler
+                # start the scan sceduler
                 search_thread = Thread(target=search_overseer_thread_ss, args=(args, new_location_queue, pause_bit, encryption_lib_path))
         else:
             log.debug('Starting a fake search thread')
