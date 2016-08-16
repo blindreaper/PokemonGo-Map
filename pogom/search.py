@@ -407,7 +407,7 @@ def search_worker_thread_ss(args, account, search_items_queue, parse_lock, encry
                                 search_items_queue.task_done()
                                 break
                             except KeyError:
-                                log.error('Search step %s map parsing failed, retyring request in %g seconds', step, sleep_time)
+                                log.exception('Search step %s map parsing failed, retrying request in %g seconds. Username: %s', step, sleep_time, account['username'])
                                 failed_total += 1
                         time.sleep(sleep_time)
                     time.sleep(sleep_time)

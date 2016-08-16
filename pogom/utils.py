@@ -165,7 +165,7 @@ def get_args():
         else:
             num_usernames = len(args.username)
 
-        if (args.location is None and not args.spawnpoint_scanning):
+        if (args.location is None):
             errors.append('Missing `location` either as -l/--location or in config')
 
         if (args.password is None):
